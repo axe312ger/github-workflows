@@ -1,0 +1,32 @@
+on:
+  workflow_call:
+
+jobs:
+  publish:
+    # todo: parameterize this as input if anyone ever needs ip-restricted runner
+    runs-on: "ubuntu-latest"
+    env:
+      GITHUB_TOKEN: ${{ secrets.SVC_CLI_BOT_GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.SVC_CLI_BOT_GITHUB_TOKEN }}
+      - uses: actions/setup-node@v3
+        with:
+          node-version: lts/*
+          cache: yarn
+      - run: yarn install --network-timeout 600000
+      - uses: oclif/github-workflows/.github/actions/gitConfig@main
+      - name: build docs
+        run: |
+          rm -rf docs
+          git worktree prune
+          git fetch origin gh-pages:gh-pages
+          git worktree add docs gh-pages
+          yarn docs
+      - name: send to git
+        run: |
+          cd docs
+          git add .
+          git commit -m 'docs: publishing gh-pages [skip ci]' --no-verify
+          git push origin gh-pages --no-verify

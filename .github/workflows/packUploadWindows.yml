@@ -1,0 +1,43 @@
+on:
+  workflow_call:
+    inputs:
+      cli:
+        type: string
+        required: true
+        description: only needed if upload. sfdx or sf
+      version:
+        type: string
+        required: true
+        description: version for upload. do not include the 'v'
+      channel:
+        type: string
+        required: true
+        description: channel that the uploaded tarballs get promoted to
+
+jobs:
+  win:
+    runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      WINDOWS_SIGNING_KEY: ${{ secrets.WINDOWS_SIGNING_KEY }}
+      SFDX_WINDOWS_SIGNING_PASS: ${{ secrets.SFDX_WINDOWS_SIGNING_PASS }}
+      SF_WINDOWS_SIGNING_PASS: ${{ secrets.SF_WINDOWS_SIGNING_PASS }}
+      SFDX_HIDE_RELEASE_NOTES: true
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: lts/*
+          cache: yarn
+      - run: |
+          sudo apt-get update
+          sudo apt-get install osslsigncode nsis
+      - run: yarn install --network-timeout 600000
+      - run: |
+          echo $WINDOWS_SIGNING_KEY | base64 --decode > /tmp/windows-signing.pfx
+      # todo: download the macos tarball and pass that to the oclif pack:macos command
+      - run: yarn pack:win
+      - run: yarn upload:win
+      - run: yarn channel:promote --cli ${{ inputs.cli }} --version ${{ inputs.version }} --target ${{ inputs.channel }} --platform win
+        name: Promote win to ${{ inputs.channel }} channel

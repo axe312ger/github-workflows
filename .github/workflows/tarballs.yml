@@ -1,0 +1,46 @@
+on:
+  workflow_call:
+    inputs:
+      upload:
+        type: boolean
+        description: true means test, then upload them AWS
+        required: false
+      cli:
+        type: string
+        required: false
+        description: only needed if upload. sfdx or sf
+      version:
+        type: string
+        required: false
+        description: version for upload. do not include the 'v'
+      channel:
+        type: string
+        required: false
+        description: channel that the uploaded tarballs get promoted to
+
+jobs:
+  tarballs:
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      SFDX_HIDE_RELEASE_NOTES: true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.SVC_CLI_BOT_GITHUB_TOKEN }}
+      - uses: actions/setup-node@v3
+        with:
+          node-version: lts/*
+          cache: yarn
+      - run: yarn install --network-timeout 600000
+      - run: yarn pack:tarballs
+        if: ${{!inputs.upload}}
+      - run: yarn pack:tarballs:sequential
+        if: ${{inputs.upload}}
+      - run: yarn pack:verify
+      - run: yarn test:smoke-unix
+      - if: inputs.upload
+        run: yarn upload:tarballs
+      - if: inputs.upload && inputs.cli && inputs.version && inputs.channel
+        run: yarn channel:promote --cli ${{ inputs.cli }} --version ${{ inputs.version }} --target ${{ inputs.channel }}
